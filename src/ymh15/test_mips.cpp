@@ -110,12 +110,12 @@ int test_add(mips_mem_h ram, mips_cpu_h cpu, uint32_t type, uint32_t max, uint8_
         mips_cpu_get_register(cpu, 8, &ans);
 
         if(type < 0x22) {
-            printf("%#10x + %#10x = %#10x\n", a, b, ans);
+            printf("%#10x + %#10x = %#10x\t%#10x\n", a, b, ans, mips_err);
             if(mips_err == mips_ExceptionArithmeticOverflow || a+b!=ans) {
                 return 0;
             }
         } else {
-            printf("%#10x - %#10x = %#10x\n", a, b, ans);
+            printf("%#10x - %#10x = %#10x\t%#10x\n", a, b, ans, mips_err);
             if(mips_err == mips_ExceptionArithmeticOverflow || a-b!=ans) {
                 return 0;
             }
@@ -147,17 +147,17 @@ int test_bitwise(mips_mem_h ram, mips_cpu_h cpu, uint8_t op) {
         mips_cpu_get_register(cpu, 7, &ans);
 
         if(op == AND) {
-            printf("%#10x & %#10x = %#10x\n", a, b, ans);
+            printf("%#10x & %#10x = %#10x\t%#10x\n", a, b, ans, mips_err);
             if((a & b) == ans) {
                 passed = 1;
             }
         } else if(op == OR) {
-            printf("%#10x | %#10x = %#10x\n", a, b, ans);
+            printf("%#10x | %#10x = %#10x\t%#10x\n", a, b, ans, mips_err);
             if((a | b) == ans) {
                 passed = 1;
             }
         } else {
-            printf("%#10x ^ %#10x = %#10x\n", a, b, ans);
+            printf("%#10x ^ %#10x = %#10x\t%#10x\n", a, b, ans, mips_err);
             if((a ^ b) == ans) {
                 passed = 1;
             }
