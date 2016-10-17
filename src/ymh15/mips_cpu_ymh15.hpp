@@ -14,9 +14,11 @@
 
 mips_error read_instruction(mips_cpu_h state);
 mips_error exec_instruction(mips_cpu_h state, uint32_t inst);
-void exec_R(mips_cpu_h state, uint32_t var[8]);
-void exec_J(mips_cpu_h state, uint32_t var[8]);
-void exec_I(mips_cpu_h state, uint32_t var[8]);
-void add_sub(mips_cpu_h state, uint32_t var[8]);
+mips_error exec_R(mips_cpu_h state, uint32_t var[8]);
+mips_error exec_J(mips_cpu_h state, uint32_t var[8]);
+mips_error exec_I(mips_cpu_h state, uint32_t var[8]);
+mips_error add_sub(mips_cpu_h state, uint32_t var[8], int32_t add_sub);
+
+uint8_t get_msb(uint32_t word);
 
 #endif // MIPS_CPU_YMH15_H

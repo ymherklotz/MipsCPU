@@ -85,11 +85,11 @@ mips_error mips_cpu_step(mips_cpu_h state) {
         return mips_ErrorInvalidArgument;
     }
 
-    read_instruction(state);
+    mips_error mips_err = read_instruction(state);
     
     state->pc += 4;
 
-    return mips_Success;
+    return mips_err;
 }
 
 mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level,
@@ -113,9 +113,7 @@ mips_error read_instruction(mips_cpu_h state) {
     uint32_t inst;
     mips_mem_read(state->mem, state->pc, 4, (uint8_t*)&inst);
     
-    exec_instruction(state, inst);
-
-    return mips_Success;
+    return exec_instruction(state, inst);
 }
 
 mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
@@ -132,45 +130,52 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
         var[SHIFT] = (inst >> 6)&0x1f;
         var[FUNC] = inst&0x3f;
         
-        exec_R(state, var);
+        return exec_R(state, var);
     } else if(((inst >> 26)&0x3f) < 4) {
         var[OPCODE] = inst >> 26;
         var[REG_S] = (inst >> 21)&0x1f;
         var[REG_D] = (inst >> 16)&0x1f;
         var[IMM] = inst&0xffff;
         
-        exec_J(state, var);
+        return exec_J(state, var);
     } else {
         var[OPCODE] = inst >> 26;
         var[MEM] = inst&0x3ffffff;
         
-        exec_I(state, var);
+        return exec_I(state, var);
+    }
+
+    return mips_ExceptionInvalidInstruction;
+}
+
+mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
+    if((var[FUNC]&0xf0) == 0x20 && (var[FUNC]&0xf) < 4) {
+        return add_sub(state, var, ((int32_t)-(var[FUNC]&0xf)/2)*2+1);
     }
 
     return mips_Success;
 }
 
-void exec_R(mips_cpu_h state, uint32_t var[8]) {
-    if((var[FUNC]&0xf0) == 0x20 && (var[FUNC]&0xf) < 4) {
-        add_sub(state, var);
-    }
-}
-
-void exec_J(mips_cpu_h state, uint32_t var[8]) {
+mips_error exec_J(mips_cpu_h state, uint32_t var[8]) {
     //TODO
+
+    return mips_Success;
 }
 
-void exec_I(mips_cpu_h state, uint32_t var[8]) {
+mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
     //TODO
+
+    return mips_Success;
 }
 
-void add_sub(mips_cpu_h state, uint32_t var[8]) {
-    if((var[FUNC]&0xf) < 2) {
-        state->regs[var[REG_D]] = state->regs[var[REG_S]] +
-            state->regs[var[REG_T]];
-        state->overflow = 0;
-        if((var[FUNC]&0xf) == 0) {
-            state->overflow = 1;
-        }
+mips_error add_sub(mips_cpu_h state, uint32_t var[8], int32_t add_sub) {
+    int32_t reg_s, reg_t, reg_d;
+    reg_s = (int32_t)state->regs[var[REG_S]];
+    reg_t = (int32_t)state->regs[var[REG_T]];
+    reg_d = reg_s + add_sub*reg_t;
+    if((var[FUNC]&0x1) == 1 || !((reg_s > 0 && add_sub*reg_t > 0 && reg_d < 0) || (reg_s < 0 && add_sub*reg_t < 0 && reg_d > 0))) {
+        state->regs[var[REG_D]] = (uint32_t)reg_d;
+        return mips_Success;
     }
+    return mips_ExceptionArithmeticOverflow;
 }
