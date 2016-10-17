@@ -14,29 +14,37 @@ int main() {
     mips_test_begin_suite();
 
     int testId = mips_test_begin_test("ADD");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x20, 0x3fffffff, 0, 10), "Testing the adder without overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, ADD, 0x3fffffff, 0, 10), "Testing the adder without overflow");
 
     testId = mips_test_begin_test("ADD");
-    mips_test_end_test(testId, !test_add(ram, cpu, 0x20, 0x7fffffff, 1, 1), "Testing the adder with overflow");
+    mips_test_end_test(testId, !test_add(ram, cpu, ADD, 0x7fffffff, 1, 1), "Testing the adder with overflow");
 
     testId = mips_test_begin_test("ADDU");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x21, 0x3fffffff, 0, 10), "testing without overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, ADDU, 0x3fffffff, 0, 10), "testing without overflow");
 
     testId = mips_test_begin_test("ADDU");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x21, 0x7fffffff, 1, 1), "Testing the adder with overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, ADDU, 0x7fffffff, 1, 1), "Testing the adder with overflow");
 
     testId = mips_test_begin_test("SUB");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x22, 0x3fffffff, 0, 10), "Testing the adder without overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, SUB, 0x3fffffff, 0, 10), "Testing the adder without overflow");
 
     testId = mips_test_begin_test("SUB");
-    mips_test_end_test(testId, !test_add(ram, cpu, 0x22, 0x7fffffff, 1, 1), "Testing the adder with overflow");
+    mips_test_end_test(testId, !test_add(ram, cpu, SUB, 0x7fffffff, 1, 1), "Testing the adder with overflow");
 
     testId = mips_test_begin_test("SUBU");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x23, 0x3fffffff, 0, 10), "Testing the adder without overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, SUBU, 0x3fffffff, 0, 10), "Testing the adder without overflow");
 
     testId = mips_test_begin_test("SUBU");
-    mips_test_end_test(testId, test_add(ram, cpu, 0x23, 0x7fffffff, 1, 1), "Testing the adder with overflow");
+    mips_test_end_test(testId, test_add(ram, cpu, SUBU, 0x7fffffff, 1, 1), "Testing the adder with overflow");
 
+    testId = mips_test_begin_test("AND");
+    mips_test_end_test(testId, test_bitwise(ram, cpu, AND), "Testing bitwise and");
+
+    testId = mips_test_begin_test("OR");
+    mips_test_end_test(testId, test_bitwise(ram, cpu, OR), "Testing bitwise or");
+
+    testId = mips_test_begin_test("XOR");
+    mips_test_end_test(testId, test_bitwise(ram, cpu, XOR), "Testing bitwise xor");
     
     mips_test_end_suite();
     return 0;
@@ -103,18 +111,63 @@ int test_add(mips_mem_h ram, mips_cpu_h cpu, uint32_t type, uint32_t max, uint8_
 
         if(type < 0x22) {
             printf("%#10x + %#10x = %#10x\n", a, b, ans);
-            if(mips_err == mips_ExceptionArithmeticOverflow) {
+            if(mips_err == mips_ExceptionArithmeticOverflow || a+b!=ans) {
                 return 0;
             }
         } else {
             printf("%#10x - %#10x = %#10x\n", a, b, ans);
-            if(mips_err == mips_ExceptionArithmeticOverflow) {
+            if(mips_err == mips_ExceptionArithmeticOverflow || a-b!=ans) {
                 return 0;
             }
         }
 
     }
 
+    return 1;
+}
+
+int test_bitwise(mips_mem_h ram, mips_cpu_h cpu, uint8_t op) {
+    uint32_t a, b, ans, inst;
+    int passed;
+    for(unsigned i = 0; i < 10; ++i) {
+        passed = 0;
+        mips_cpu_reset(cpu);
+        inst = gen_instruction(8, 9, 7, 0, op);
+
+        a = rand() % 0xffffffff;
+        b = rand() % 0xffffffff;
+
+        mips_mem_write(ram, 0, 4, (uint8_t*)&inst);
+
+        mips_cpu_set_register(cpu, 8, a);
+        mips_cpu_set_register(cpu, 9, b);
+
+        mips_error mips_err = mips_cpu_step(cpu);
+
+        mips_cpu_get_register(cpu, 7, &ans);
+
+        if(op == AND) {
+            printf("%#10x & %#10x = %#10x\n", a, b, ans);
+            if((a & b) == ans) {
+                passed = 1;
+            }
+        } else if(op == OR) {
+            printf("%#10x | %#10x = %#10x\n", a, b, ans);
+            if((a | b) == ans) {
+                passed = 1;
+            }
+        } else {
+            printf("%#10x ^ %#10x = %#10x\n", a, b, ans);
+            if((a ^ b) == ans) {
+                passed = 1;
+            }
+        }
+
+        
+        if(mips_err != mips_Success || !passed) {
+            return 0;
+        }
+    }
     return 1;
 }
 
