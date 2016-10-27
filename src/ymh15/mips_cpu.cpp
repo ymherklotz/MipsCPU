@@ -68,7 +68,7 @@ mips_error mips_cpu_get_register(mips_cpu_h state, unsigned index,
 mips_error mips_cpu_set_register(mips_cpu_h state, unsigned index,
                                  uint32_t value) {
     if(index > 31 || index < 1) {
-        return mips_ErrorInvalidArgument;
+        return mips_ExceptionAccessViolation;
     }
     // set reg state
     state->regs[index] = value;
@@ -102,18 +102,26 @@ mips_error mips_cpu_step(mips_cpu_h state) {
     // change the instruction back from big endian as it was read as little endian
     inst = (inst<<24) | ((inst>>8)&0xff00) | ((inst<<8)&0xff0000) | (inst>>24);
 
-    // it then executes the instruction by decoding it first and returns
-    // the state of the instruction
-    mips_error mips_err = exec_instruction(state, inst);
-
-
+    // if the debug level is 2 or higher it will print the register state
+    if(state->debug_level > 2) {
+        fprintf(state->debug_type, "\nCPU register state before:\n");
+        for(unsigned i = 0; i < 32; ++i) {
+            fprintf(state->debug_type, "R%d:\t%#10x\n", i,
+                    state->regs[i]);
+        }
+        fprintf(state->debug_type, "\n\n");
+    }
+    
     if(state->debug_level > 0) {
         fprintf(state->debug_type, "pc: %d\tpc_next: %d\tinst: %#10x\tdelay_slot: %d\n", state->pc, state->next_pc, inst, state->delay_slot);
     }
 
-    // if the debug level is 2 or higher it will print the register state
+    // it then executes the instruction by decoding it first and returns
+    // the state of the instruction
+    mips_error err = exec_instruction(state, inst);
+
     if(state->debug_level > 1) {
-        fprintf(state->debug_type, "\nCPU register state:\n");
+        fprintf(state->debug_type, "\nCPU register state after:\n");
         for(unsigned i = 0; i < 32; ++i) {
             fprintf(state->debug_type, "R%d:\t%#10x\n", i,
                     state->regs[i]);
@@ -121,8 +129,10 @@ mips_error mips_cpu_step(mips_cpu_h state) {
         fprintf(state->debug_type, "\n\n");
     }
 
-    if(state->debug_level > 2) {
+    if(state->debug_level > 3) {
         char c = getchar();
+        // do nothing with c to supress warning
+        (void)c;
     }
     
     // it then updates the pc to next_pc which could have been changed
@@ -136,15 +146,11 @@ mips_error mips_cpu_step(mips_cpu_h state) {
     }
 
     // returns the operation error such as arithmetic overflow
-    return mips_err;
+    return err;
 }
 
 mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level,
                                     FILE *dest) {
-    if(!state) {
-        return mips_ErrorInvalidArgument;
-    }
-
     // just sets the cpu values for the debug level
     state->debug_level = level;
     state->debug_type = dest;
@@ -166,8 +172,6 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
     // creates var that holds all the information of the instruction
     uint32_t var[8];
 
-    // prints pc and instruction every clock cycle
-    
     for(int i = 0; i < 8; ++i) {
         var[i] = 0;
     }
@@ -175,26 +179,25 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
     // decodes the instruction
 
     // if first 6 bits are 0 then it is a R instruction
-    if(((inst >> 26)&0x3f) == 0) {
-        // R Type: set all necessary variables
+    if(((inst >> 26)&0x3f) == 0) {                                       // R Type
         var[REG_S] = inst >> 21;
         var[REG_T] = (inst >> 16)&0x1f;
         var[REG_D] = (inst >> 11)&0x1f;
         var[SHIFT] = (inst >> 6)&0x1f;
         var[FUNC] = inst&0x3f;
-
         // execute R instruction to perform operation
         return exec_R(state, var);
-    } else if(((inst >> 26)&0x3f) == J || ((inst >> 26)&0x3f) == JAL) {    // as opcode is < 4
-        var[OPCODE] = inst >> 26;           // it has to be J type
+        
+    } else if(((inst >> 26)&0x3f) == J || ((inst >> 26)&0x3f) == JAL) {  // J Type
+        var[OPCODE] = inst >> 26;           
         var[MEM] = inst&0x3ffffff;
         return exec_J(state, var);
-    } else {                                // otherwise it is an I type
+        
+    } else {                                                             // I type
         var[OPCODE] = inst >> 26;      
         var[REG_S] = (inst >> 21)&0x1f;
         var[REG_D] = (inst >> 16)&0x1f;
         var[IMM] = (uint32_t)(int16_t)(inst&0xffff);
-        
         return exec_I(state, var);
     }
 }
@@ -212,19 +215,15 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
         return bitwise(state, var, 0);
         
     } else if(var[FUNC] == JR) {
-        // jr
         return jump(state, var, 0);
         
     } else if(var[FUNC] == JALR) {
-        // jalr
         return jump(state, var, 1);
         
     } else if(var[FUNC] >= MFHI && var[FUNC] <= MTLO) {
-        // mfhi mthi mflo mtlo
         return move(state, var);
         
     } else if(var[FUNC] >= MULT && var[FUNC] <= DIVU) {
-        // mult multu div divu
         return mult_div(state, var);
         
     } else if(var[FUNC] == SLT || var[FUNC] == SLTU) {
@@ -244,9 +243,9 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
 
 mips_error exec_J(mips_cpu_h state, uint32_t var[8]) {
     switch(var[OPCODE]) {
-    case J: // j
+    case J:
         return jump(state, var, 0);
-    case JAL: // jal
+    case JAL:
         return jump(state, var, 1);
     default:
         return mips_ExceptionInvalidInstruction;
@@ -255,19 +254,19 @@ mips_error exec_J(mips_cpu_h state, uint32_t var[8]) {
 
 mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
     switch(var[OPCODE]) {
-    case BGEZ: // bgez, bgezal, bltz, bltzal
+    case BGEZ: 
         return branch(state, var);
-    case BEQ: // beq
+    case BEQ: 
         return branch(state, var);
-    case BNE: // bne
+    case BNE:
         return branch(state, var);
-    case BLEZ: // blez
+    case BLEZ: 
         return branch(state, var); 
-    case BGTZ: // bgtz
+    case BGTZ: 
         return branch(state, var);
-    case ADDI: // addi
+    case ADDI: 
         return add_sub(state, var, 1, 1);
-    case ADDIU: // addiu
+    case ADDIU: 
         return add_sub(state, var, 1, 2);
     case SLTI:
         return set(state, var, 1);
@@ -275,31 +274,31 @@ mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
         return set(state, var, 1);
     case ANDI:
         return bitwise(state, var, 1);
-    case ORI: // ori
+    case ORI: 
         return bitwise(state, var, 1);
-    case XORI: // xori
+    case XORI: 
         return bitwise(state, var, 1);
-    case LUI: // lui
+    case LUI: 
         return load(state, var);
-    case LB: // lb
+    case LB: 
         return load(state, var);
-    case LH: // lh
+    case LH: 
         return load(state, var);
-    case LWL: // lwl
+    case LWL: 
         return load(state, var);
-    case LW: // lw
+    case LW: 
         return load(state, var);
-    case LBU: // lbu
+    case LBU: 
         return load(state, var);
-    case LHU: // lhu
+    case LHU: 
         return load(state, var);
-    case LWR: // lwr
+    case LWR: 
         return load(state, var);
-    case SB: // sb
+    case SB:
         return store(state, var);
-    case SH: // sh
+    case SH: 
         return store(state, var);
-    case SW: // sw
+    case SW: 
         return store(state, var);
     default:
         return mips_ExceptionInvalidInstruction;
