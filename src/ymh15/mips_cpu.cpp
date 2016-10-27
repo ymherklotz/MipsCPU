@@ -97,7 +97,10 @@ mips_error mips_cpu_get_pc(mips_cpu_h state, uint32_t *pc) {
 mips_error mips_cpu_step(mips_cpu_h state) {
     // gets the instruction from memory
     uint32_t inst;
-    mips_mem_read(state->mem, state->pc, 4, (uint8_t*)&inst);
+    mips_error err;
+    
+    err = mips_mem_read(state->mem, state->pc, 4, (uint8_t*)&inst);
+    if(err != mips_Success) return err;
     
     // change the instruction back from big endian as it was read as little endian
     inst = (inst<<24) | ((inst>>8)&0xff00) | ((inst<<8)&0xff0000) | (inst>>24);
@@ -118,7 +121,8 @@ mips_error mips_cpu_step(mips_cpu_h state) {
 
     // it then executes the instruction by decoding it first and returns
     // the state of the instruction
-    mips_error err = exec_instruction(state, inst);
+    err = exec_instruction(state, inst);
+    if(err != mips_Success) return err;
 
     if(state->debug_level > 1) {
         fprintf(state->debug_type, "\nCPU register state after:\n");
@@ -146,7 +150,7 @@ mips_error mips_cpu_step(mips_cpu_h state) {
     }
 
     // returns the operation error such as arithmetic overflow
-    return err;
+    return mips_Success;
 }
 
 mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level,
@@ -407,27 +411,34 @@ mips_error load(mips_cpu_h state, uint32_t var[8]) {
     uint16_t mem_halfword = 0;
     uint32_t mem_word = 0;
     unsigned i = 0;
+    mips_error err;
     
     addr = state->regs[var[REG_S]] + var[IMM];
 
     if(var[OPCODE] == LB || var[OPCODE] == LBU) {
-        mips_mem_read(state->mem, addr, 1, &mem_byte);
+        err = mips_mem_read(state->mem, addr, 1, &mem_byte);
+        if(err != mips_Success) {
+            return err;
+        }
     } else if(var[OPCODE] == LH || var[OPCODE] == LHU) {
         if((addr&0b1) == 1) {
             return mips_ExceptionInvalidAlignment;
         }
-        mips_mem_read(state->mem, addr, 2, (uint8_t*)&mem_halfword);
+        err = mips_mem_read(state->mem, addr, 2, (uint8_t*)&mem_halfword);
+        if(err != mips_Success) return err;
         mem_halfword = mem_halfword>>8 | mem_halfword<<8;
     } else if(var[OPCODE] == LW) {
         if((addr&0b1) == 1 || (addr&0b10)>>1 == 1) {
             return mips_ExceptionInvalidAlignment;
         }
-        mips_mem_read(state->mem, addr, 4, (uint8_t*)&mem_word);
+        err = mips_mem_read(state->mem, addr, 4, (uint8_t*)&mem_word);
+        if(err != mips_Success) return err;
         mem_word = (mem_word<<24) | ((mem_word>>8)&0xff00) | ((mem_word<<8)&0xff0000) | (mem_word>>24);
     } else if(var[OPCODE] == LWL) {
         i = 3;
         while((addr&3) != 0) {
-            mips_mem_read(state->mem, addr, 1, &mem_byte);
+            err = mips_mem_read(state->mem, addr, 1, &mem_byte);
+            if(err != mips_Success) return err;
             mem_word = mem_word | ((uint32_t)mem_byte<<(i*8));
             ++addr;
             --i;
@@ -435,7 +446,8 @@ mips_error load(mips_cpu_h state, uint32_t var[8]) {
     } else if(var[OPCODE] == LWR) {
         i = 0;
         while((addr&3) != 3) {
-            mips_mem_read(state->mem, addr, 1, &mem_byte);
+            err = mips_mem_read(state->mem, addr, 1, &mem_byte);
+            if(err != mips_Success) return err;
             mem_word = mem_word | ((uint32_t)mem_byte<<(i*8));
             --addr;
             ++i;
@@ -477,6 +489,7 @@ mips_error store(mips_cpu_h state, uint32_t var[8]) {
     uint32_t word;
     uint16_t half_word;
     uint8_t byte;
+    mips_error err;
     
     addr = state->regs[var[REG_S]] + var[IMM];
     word = state->regs[var[REG_D]];
@@ -484,19 +497,22 @@ mips_error store(mips_cpu_h state, uint32_t var[8]) {
     byte = (uint8_t)state->regs[var[REG_D]];
     
     if(var[OPCODE] == SB) {
-        mips_mem_write(state->mem, addr, 1, &byte);
+        err = mips_mem_write(state->mem, addr, 1, &byte);
+        if(err != mips_Success) return err;
     } else if(var[OPCODE] == SH) {
         if((addr&0b1) == 1) {
             return mips_ExceptionInvalidAlignment;
         }
         uint16_t tmp = half_word << 8 | half_word >> 8;
-        mips_mem_write(state->mem, addr, 2, (uint8_t*)&tmp);
+        err = mips_mem_write(state->mem, addr, 2, (uint8_t*)&tmp);
+        if(err != mips_Success) return err;
     } else if(var[OPCODE] == SW) {
         if((addr&0b1) == 1 || (addr&0b10)>>1 == 1) {
             return mips_ExceptionInvalidAlignment;
         }
         uint32_t tmp = word<<24 | ((word>>8)&0xff00) | ((word<<8)&0xff0000) | word>>24;
-        mips_mem_write(state->mem, addr, 4, (uint8_t*)&tmp);
+        err = mips_mem_write(state->mem, addr, 4, (uint8_t*)&tmp);
+        if(err != mips_Success) return err;
     } else {
         return mips_ExceptionInvalidInstruction;
     }
@@ -580,11 +596,14 @@ mips_error shift(mips_cpu_h state, uint32_t var[8]) {
 
 mips_error set(mips_cpu_h state, uint32_t var[8], uint32_t imm) {
     uint32_t reg_s, reg_t, reg_d;
+    mips_error err;
 
-    mips_cpu_get_register(state, var[REG_S], &reg_s);
+    err = mips_cpu_get_register(state, var[REG_S], &reg_s);
+    if(err != mips_Success) return err;
     
     if(!imm) {
-        mips_cpu_get_register(state, var[REG_T], &reg_t);
+        err = mips_cpu_get_register(state, var[REG_T], &reg_t);
+        if(err != mips_Success) return err;
     } else {
         reg_t = var[IMM];
     }
@@ -605,7 +624,8 @@ mips_error set(mips_cpu_h state, uint32_t var[8], uint32_t imm) {
         return mips_ExceptionInvalidInstruction;
     }
 
-    mips_cpu_set_register(state, var[REG_D], reg_d);
+    err = mips_cpu_set_register(state, var[REG_D], reg_d);
+    if(err != mips_Success) return err;
 
     return mips_Success;
 }
