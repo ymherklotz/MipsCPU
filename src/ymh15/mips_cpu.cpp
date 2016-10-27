@@ -27,6 +27,8 @@ mips_cpu_h mips_cpu_create(mips_mem_h mem) {
     state->pc = 0;
     state->next_pc = state->pc + 4;
     state->delay_slot = 0;
+    state->lo = 0;
+    state->hi = 0;
     
     state->debug_level = 0;
     state->debug_type = NULL;
@@ -48,6 +50,8 @@ mips_error mips_cpu_reset(mips_cpu_h state) {
     state->pc = 0;
     state->next_pc = state->pc + 4;
     state->delay_slot = 0;
+    state->hi = 0;
+    state->lo = 0;
 
     // and registers
     for(int i = 0; i < 32; ++i) {
@@ -59,7 +63,7 @@ mips_error mips_cpu_reset(mips_cpu_h state) {
 
 mips_error mips_cpu_get_register(mips_cpu_h state, unsigned index,
                                  uint32_t *value) {
-    if(!state || !value || index > 31) {
+    if(!state || !value || index > 31 || index == 0) {
         return mips_ErrorInvalidArgument;
     }
 
@@ -71,7 +75,7 @@ mips_error mips_cpu_get_register(mips_cpu_h state, unsigned index,
 
 mips_error mips_cpu_set_register(mips_cpu_h state, unsigned index,
                                  uint32_t value) {
-    if(!state || index > 31) {
+    if(!state || index > 31 || index == 0) {
         return mips_ErrorInvalidArgument;
     }
 
@@ -234,9 +238,19 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
     } else if(var[FUNC] == 8) {
         // jr
         return jump(state, var, 0);
+        
     } else if(var[FUNC] == 9) {
         // jalr
         return jump(state, var, 1);
+        
+    } else if(var[FUNC] >= 0x10 && var[FUNC] <= 0x13) {
+        // mfhi mthi mflo mtlo
+        return move(state, var);
+        
+    } else if(var[FUNC] >= 0x18 && var[FUNC] <= 0x1b) {
+        // mult multu div divu
+        return mult_div(state, var);
+        
     } else {
         // otherwise return that it was an invalid instruction
         return mips_ExceptionInvalidInstruction;
@@ -257,30 +271,48 @@ mips_error exec_J(mips_cpu_h state, uint32_t var[8]) {
 
 mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
     switch(var[OPCODE]) {
-    case 1: // bgez, bgezal, bltz, bltzal
+    case 0x1: // bgez, bgezal, bltz, bltzal
         return branch(state, var);
-    case 4: // beq
+    case 0x4: // beq
         return branch(state, var);
-    case 5: // bne
+    case 0x5: // bne
         return branch(state, var);
-    case 6: // blez
+    case 0x6: // blez
         return branch(state, var); 
-    case 7: // bgtz
+    case 0x7: // bgtz
         return branch(state, var);
-    case 8: // addi
+    case 0x8: // addi
         return add_sub(state, var, 1, 1);
-    case 9: // addiu
+    case 0x9: // addiu
         return add_sub(state, var, 1, 2);
-    case 12: // andi
+    case 0xc: // andi
         return bitwise(state, var, 1);
-    case 13: // ori
+    case 0xd: // ori
         return bitwise(state, var, 1);
-    case 14: // xori
+    case 0xe: // xori
         return bitwise(state, var, 1);
-    case 32: // lb
+    case 0xf: // lui
         return load(state, var);
-    case 36: // lbu
+    case 0x20: // lb
         return load(state, var);
+    case 0x21: // lh
+        return load(state, var);
+    case 0x22: // lwl
+        return load(state, var);
+    case 0x23: // lw
+        return load(state, var);
+    case 0x24: // lbu
+        return load(state, var);
+    case 0x25: // lhu
+        return load(state, var);
+    case 0x26: // lwr
+        return load(state, var);
+    case 0x28: // sb
+        return store(state, var);
+    case 0x29: // sh
+        return store(state, var);
+    case 0x2b: // sw
+        return store(state, var);
     default:
         return mips_ExceptionInvalidInstruction;
     }
@@ -361,7 +393,7 @@ mips_error jump(mips_cpu_h state, uint32_t var[8], uint8_t link) {
         jump_loc = state->regs[var[REG_S]];
         reg_d = var[REG_D];
     } else {
-        jump_loc = var[IMM]<<2;
+        jump_loc = var[MEM]<<2;
         reg_d = 31;
     }
     
@@ -378,22 +410,157 @@ mips_error jump(mips_cpu_h state, uint32_t var[8], uint8_t link) {
 mips_error load(mips_cpu_h state, uint32_t var[8]) {
     uint32_t addr;
     uint8_t mem_byte;
+    uint16_t mem_halfword;
+    uint32_t mem_word;
     
     addr = state->regs[var[REG_S]] + var[IMM];
 
-    mips_mem_read(state->mem, addr, 1, &mem_byte);
-
-    if(var[OPCODE] == 0x24) {
-        state->regs[var[REG_D]] = (uint32_t)mem_byte;
-    } else if(var[OPCODE] == 0x20){
-        state->regs[var[REG_D]] = (uint32_t)(int8_t)mem_byte;
-    } else {
-        return mips_ExceptionInvalidInstruction;
+    if(var[OPCODE] == 0x24 || var[OPCODE] == 0x20) { // lb lbu
+        mips_mem_read(state->mem, addr, 1, &mem_byte);
+    } else if(var[OPCODE] == 0x21 || var[OPCODE] == 0x25) { // lh lhu
+        if((addr&0b1) == 1) {
+            return mips_ExceptionInvalidAddress;
+        }
+        mips_mem_read(state->mem, addr, 2, (uint8_t*)&mem_halfword);
+        mem_halfword = mem_halfword>>8 | mem_halfword<<8;
+    } else if(var[OPCODE] == 0x23 || var[OPCODE] == 0x22) { // lw lwl
+        if((addr&0b1) == 1 || (addr&0b10)>>1 == 1) {
+            return mips_ExceptionInvalidAddress;
+        }
+        mips_mem_read(state->mem, addr, 4, (uint8_t*)&mem_word);
+        mem_word = (mem_word<<24) | ((mem_word>>8)&0xff00) | ((mem_word<<8)&0xff0000) | (mem_word>>24);
+    } else if(var[OPCODE] == 0x26) { // lwr
+        if((addr&0b1) == 0 || (addr&0b10)>>1 == 0) {
+            return mips_ExceptionInvalidAddress;
+        }
+        mips_mem_read(state->mem, addr-3, 4, (uint8_t*)&mem_word);
+        mem_word = (mem_word<<24) | ((mem_word>>8)&0xff00) | ((mem_word<<8)&0xff0000) | (mem_word>>24);
     }
 
-    return mips_Success;
+    switch(var[OPCODE]) {
+    case 0xf:
+        state->regs[var[REG_D]] = var[IMM]<<16;
+        return mips_Success;
+    case 0x20:
+        state->regs[var[REG_D]] = (uint32_t)(int8_t)mem_byte;
+        return mips_Success;
+    case 0x21:
+        state->regs[var[REG_D]] = (uint32_t)(int16_t)mem_halfword;
+        return mips_Success;
+    case 0x22:
+        state->regs[var[REG_D]] = (mem_word&0xffff0000)|(state->regs[var[REG_D]]&0xffff);
+        return mips_Success;
+    case 0x23:
+        state->regs[var[REG_D]] = mem_word;
+        return mips_Success;
+    case 0x24:
+        state->regs[var[REG_D]] = (uint32_t)mem_byte;
+        return mips_Success;
+    case 0x25:
+        state->regs[var[REG_D]] = (uint32_t)mem_halfword;
+        return mips_Success;
+    case 0x26:
+        state->regs[var[REG_D]] = (state->regs[var[REG_D]]&0xffff0000)|(mem_word&0xffff);
+        return mips_Success;
+    default:
+        return mips_ExceptionInvalidInstruction;
+    }
 }
 
 mips_error store(mips_cpu_h state, uint32_t var[8]) {
+    uint32_t addr;
+    uint32_t word;
+    uint16_t half_word;
+    uint8_t byte;
+    
+    addr = state->regs[var[REG_S]] + var[IMM];
+    word = state->regs[var[REG_D]];
+    half_word = (uint16_t)state->regs[var[REG_D]];
+    byte = (uint8_t)state->regs[var[REG_D]];
+    
+    if(var[OPCODE] == 0x28) {
+        mips_mem_write(state->mem, addr, 1, &byte);
+    } else if(var[OPCODE] == 0x29) {
+        if((addr&0b1) == 1) {
+            return mips_ExceptionInvalidAddress;
+        }
+        uint16_t tmp = half_word << 8 | half_word >> 8;
+        mips_mem_write(state->mem, addr, 2, (uint8_t*)&tmp);
+    } else if(var[OPCODE] == 0x2b) {
+        if((addr&0b1) == 1 || (addr&0b10)>>1 == 1) {
+            return mips_ExceptionInvalidAddress;
+        }
+        uint32_t tmp = word<<24 | ((word>>8)&0xff00) | ((word<<8)&0xff0000) | word>>24;
+        mips_mem_write(state->mem, addr, 4, (uint8_t*)&tmp);
+    } else {
+        return mips_ExceptionInvalidInstruction;
+    }
+    return mips_Success;
+}
+
+mips_error move(mips_cpu_h state, uint32_t var[8]) {
+    switch(var[FUNC]) {
+    case 0x10:
+        return mips_cpu_set_register(state, var[REG_D], state->hi);
+    case 0x11:
+        return mips_cpu_get_register(state, var[REG_D], &state->hi);
+    case 0x12:
+        return mips_cpu_set_register(state, var[REG_D], state->lo);
+    case 0x13:
+        return mips_cpu_get_register(state, var[REG_D], &state->lo);
+    default:
+        return mips_ExceptionInvalidInstruction;
+    }
+    return mips_Success;
+}
+
+mips_error mult_div(mips_cpu_h state, uint32_t var[8]) {
+    uint64_t unsigned_result, signed_result;
+    switch(var[FUNC]) {
+    case 0x18: // mult
+        signed_result = ((int64_t)(int32_t)state->regs[var[REG_S]])*((int64_t)(int32_t)state->regs[var[REG_T]]);
+        state->lo = (uint32_t)signed_result;
+        state->hi = (uint32_t)(signed_result>>32);
+        return mips_Success;
+        
+    case 0x19: // multu
+        unsigned_result = ((uint64_t)state->regs[var[REG_S]])*((uint64_t)state->regs[var[REG_T]]);
+        state->lo = (uint32_t)unsigned_result;
+        state->hi = (uint32_t)(unsigned_result>>32);
+        return mips_Success;
+        
+    case 0x1a: // div
+        if(var[REG_T] == 0) {
+            state->lo = 0;
+            state->hi = 0;
+            return mips_Success;
+        }
+        
+        state->lo = ((int32_t)state->regs[var[REG_S]])/((int32_t)state->regs[var[REG_T]]);
+        state->hi = ((int32_t)state->regs[var[REG_S]])%((int32_t)state->regs[var[REG_T]]);
+        return mips_Success;
+        
+    case 0x1b: // divu
+        if(var[REG_T] == 0) {
+            state->lo = 0;
+            state->hi = 0;
+            return mips_Success;
+        }
+        
+        state->lo = (state->regs[var[REG_S]])/(state->regs[var[REG_T]]);
+        state->hi = (state->regs[var[REG_S]])%(state->regs[var[REG_T]]);
+        return mips_Success;
+        
+    default:
+        return mips_ExceptionInvalidInstruction;
+    }
+}
+
+mips_error shift(mips_cpu_h state, uint32_t var[8]) {
+    if(var[FUNC] == 0 && var[OPCODE] == 0) {
+        state->regs[var[REG_D]] = state->regs[var[REG_T]] << var[SHIFT];
+    } else if(var[FUNC] == 4) {
+        state->regs[var[REG_D]] = state->regs[var[REG_T]] << state->regs[var[REG_S]];
+    } else if(var[FUNC] == 2/*TODO*/);
     return mips_Success;
 }

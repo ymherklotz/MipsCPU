@@ -92,22 +92,52 @@ int main(int argc, char** argv) {
     mips_test_end_test(testId, test_branch(ram, cpu, 1, -1, 0, 16, 20), "Testing BGEZ");
     
     testId = mips_test_begin_test("J");
-    mips_test_end_test(testId, test_branch(ram, cpu, 1, -1, 0, 16, 20), "Testing BGEZ");
+    mips_test_end_test(testId, test_jump(ram, cpu, J), "Testing J");
     
     testId = mips_test_begin_test("JAL");
-    mips_test_end_test(testId, test_branch(ram, cpu, 1, -1, 0, 16, 20), "Testing BGEZ");
+    mips_test_end_test(testId, test_jump(ram, cpu, JAL), "Testing JAL");
     
     testId = mips_test_begin_test("JALR");
-    mips_test_end_test(testId, test_branch(ram, cpu, 1, -1, 0, 16, 20), "Testing BGEZ");
+    mips_test_end_test(testId, test_jump(ram, cpu, JALR), "Testing JALR");
     
     testId = mips_test_begin_test("JR");
-    mips_test_end_test(testId, test_branch(ram, cpu, 1, -1, 0, 16, 20), "Testing BGEZ");
+    mips_test_end_test(testId, test_jump(ram, cpu, JR), "Testing JR");
     
     testId = mips_test_begin_test("LB");
-    mips_test_end_test(testId, test_load(ram, cpu, LB, 0xff), "Testing LB");
+    mips_test_end_test(testId, test_load(ram, cpu, LB, 0xf7), "Testing LB");
     
     testId = mips_test_begin_test("LBU");
-    mips_test_end_test(testId, test_load(ram, cpu, LBU, 0xff), "Testing LB");
+    mips_test_end_test(testId, test_load(ram, cpu, LBU, 0xf7), "Testing LBU");
+    
+    testId = mips_test_begin_test("LH");
+    mips_test_end_test(testId, test_load(ram, cpu, LH, 0xff7f), "Testing LH");
+    
+    testId = mips_test_begin_test("LHU");
+    mips_test_end_test(testId, test_load(ram, cpu, LHU, 0xff7f), "Testing LHU");
+    
+    testId = mips_test_begin_test("LW");
+    mips_test_end_test(testId, test_load(ram, cpu, LW, 0xffffff7f), "Testing LW");
+    
+    testId = mips_test_begin_test("LUI");
+    mips_test_end_test(testId, test_load(ram, cpu, LUI, 0xff7f), "Testing LUI");
+    
+    testId = mips_test_begin_test("LWL");
+    mips_test_end_test(testId, test_load(ram, cpu, LWL, 0xff6fff7f), "Testing LWL");
+    
+    testId = mips_test_begin_test("LWR");
+    mips_test_end_test(testId, test_load(ram, cpu, LWR, 0xff6fff7f), "Testing LWR");
+    
+    testId = mips_test_begin_test("MULT");
+    mips_test_end_test(testId, test_mult_div(ram, cpu, MULT, 5, -4), "Testing LWR");
+    
+    testId = mips_test_begin_test("MULTU");
+    mips_test_end_test(testId, test_mult_div(ram, cpu, MULTU, 5, -4), "Testing LWR");
+    
+    testId = mips_test_begin_test("DIV");
+    mips_test_end_test(testId, test_mult_div(ram, cpu, DIV, 5, -4), "Testing LWR");
+
+    testId = mips_test_begin_test("DIVU");
+    mips_test_end_test(testId, test_mult_div(ram, cpu, DIVU, 5, -4), "Testing LWR");
     
     mips_test_end_suite();
     return 0;
@@ -324,38 +354,129 @@ int test_branch(mips_mem_h ram, mips_cpu_h cpu, uint32_t opcode, uint32_t a, uin
 
 int test_jump(mips_mem_h ram, mips_cpu_h cpu, uint32_t opcode) {
     int passed = 0;
-    uint32_t inst;
+    uint32_t inst, reg10, reg13, reg16, reg31;
 
     mips_cpu_reset(cpu);
 
     if(opcode == 2 || opcode == 3) {
         inst = change_endianness(gen_instruction(opcode, 0x20));
+    } else if(opcode == 8 || opcode == 9) {
+        inst = change_endianness(gen_instruction(25, 0, 31, 0, opcode));
+    }
+
+    mips_mem_write(ram, 0, 4, (uint8_t*)&inst);
+
+    inst = change_endianness(gen_instruction(8, 9, 10, 0, ADDU));
+    mips_mem_write(ram, 4, 4, (uint8_t*)&inst);
+    inst = change_endianness(gen_instruction(11, 12, 13, 0, ADDU));
+    mips_mem_write(ram, 8, 4, (uint8_t*)&inst);
+    inst = change_endianness(gen_instruction(14, 15, 16, 0, ADDU));
+    mips_mem_write(ram, 0x20<<2, 4, (uint8_t*)&inst);
+
+    mips_cpu_set_register(cpu, 8, 8);
+    mips_cpu_set_register(cpu, 9, 9);
+    mips_cpu_set_register(cpu, 10, 10);
+    mips_cpu_set_register(cpu, 11, 11);
+    mips_cpu_set_register(cpu, 12, 12);
+    mips_cpu_set_register(cpu, 13, 13);
+    mips_cpu_set_register(cpu, 14, 14);
+    mips_cpu_set_register(cpu, 15, 15);
+    mips_cpu_set_register(cpu, 16, 16);
+    mips_cpu_set_register(cpu, 25, 0x20<<2);
+
+    mips_cpu_step(cpu);
+    mips_cpu_step(cpu);
+    mips_cpu_step(cpu);
+
+    mips_cpu_get_register(cpu, 10, &reg10);
+    mips_cpu_get_register(cpu, 13, &reg13);
+    mips_cpu_get_register(cpu, 16, &reg16);
+    mips_cpu_get_register(cpu, 31, &reg31);
+
+    if(reg10 == 9+8 && reg13 == 13 && reg16 == 14+15) {
+        passed = 1;
+    }
+    
+    if((opcode == 3 || opcode == 9) && reg31 != 8) {
+        passed = 0;
     }
 
     return passed;
 }
 
-int test_load(mips_mem_h ram, mips_cpu_h cpu, uint32_t opcode, uint8_t num) {
+int test_load(mips_mem_h ram, mips_cpu_h cpu, uint32_t opcode, uint32_t word) {
     int passed = 0;
+    uint16_t half_word;
+    uint8_t byte;
     uint32_t res;
+
+    half_word = (uint16_t)word;
+    byte = (uint8_t)word;
 
     mips_cpu_reset(cpu);
 
     uint32_t inst = change_endianness(gen_instruction(opcode, 8, 9, 4));
 
     mips_mem_write(ram, 0, 4, (uint8_t*)&inst);
-    mips_mem_write(ram, 0x30, 1, &num);
+    
+    if(opcode == LB || opcode == LBU) {
+        mips_mem_write(ram, 0x30, 1, &byte);
+    } else if(opcode == LH || opcode == LHU) {
+        uint16_t tmp = (half_word<<8) | (half_word>>8);
+        mips_mem_write(ram, 0x30, 2, (uint8_t*)&tmp);
+    } else {
+        uint32_t tmp = change_endianness(word);
+        mips_mem_write(ram, 0x30, 4, (uint8_t*)&tmp);
+    }
 
     mips_cpu_set_register(cpu, 8, 0x2c);
+    if(opcode == LWR) {
+        mips_cpu_set_register(cpu, 8, 0x2f);
+    }
+    mips_cpu_set_register(cpu, 9, 0xbabacdcd);
 
     mips_cpu_step(cpu);
     
     mips_cpu_get_register(cpu, 9, &res);
 
-    if((res == (uint32_t)(int8_t)num && opcode == LB) || (res == (uint32_t)num && opcode == LBU)) {
+    if((res == (uint32_t)(int8_t)byte && opcode == LB) || (res == (uint32_t)byte && opcode == LBU) || (res == (uint32_t)(int16_t)half_word && opcode == LH) || (res == (uint32_t)half_word && opcode == LHU) || (res == word && opcode == LW) || (res == 4<<16 && opcode == LUI) || (res == ((word&0xffff)|(0xbaba0000)) && (opcode == LWR)) || (res == ((word&0xffff0000)|(0xcdcd)))) {
         passed = 1;
     }
 
     return passed;
 }
 
+int test_mult_div(mips_mem_h ram, mips_cpu_h cpu, uint32_t opcode, uint32_t num1, uint32_t num2) {
+    int passed = 0;
+    uint64_t result;
+    uint32_t hi, lo;
+
+    mips_cpu_reset(cpu);
+    
+    uint32_t inst = change_endianness(gen_instruction(8, 9, 0, 0, opcode));
+    mips_mem_write(ram, 0, 4, (uint8_t*)&inst);
+    inst = change_endianness(gen_instruction(0, 0, 10, 0, MFHI));
+    mips_mem_write(ram, 4, 4, (uint8_t*)&inst);
+    inst = change_endianness(gen_instruction(0, 0, 11, 0, MFLO));
+    mips_mem_write(ram, 8, 4, (uint8_t*)&inst);
+
+    mips_cpu_set_register(cpu, 8, num1);
+    mips_cpu_set_register(cpu, 9, num2);
+    mips_cpu_set_register(cpu, 10, 0xabcde);
+    mips_cpu_set_register(cpu, 11, 0xf193b);
+
+    mips_cpu_step(cpu);
+    mips_cpu_step(cpu);
+    mips_cpu_step(cpu);
+
+    mips_cpu_get_register(cpu, 10, &hi);
+    mips_cpu_get_register(cpu, 11, &lo);
+
+    result = (((uint64_t)hi)<<32) | ((uint64_t)lo);
+
+    if((opcode == MULT && result == (uint64_t)((int64_t)(int32_t)num1*(int64_t)(int32_t)num2)) || (opcode == MULTU && result == (uint64_t)((uint32_t)num1)*(uint32_t)num2) || (opcode == DIV && lo == (uint32_t)((int32_t)num1/(int32_t)num2) && hi == (uint32_t)((int32_t)num1%(int32_t)num2)) || (opcode == DIVU && lo == num1/num2 && hi == num1%num2)) {
+        passed = 1;
+    }
+
+    return passed;
+}
