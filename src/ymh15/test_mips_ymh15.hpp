@@ -6,6 +6,7 @@
 #include <ctime>
 
 // Functions
+#define NOOP 0x0
 #define SLL 0x0
 #define SRL 0x2
 #define SRA 0x3

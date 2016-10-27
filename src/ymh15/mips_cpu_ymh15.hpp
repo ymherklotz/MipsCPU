@@ -16,6 +16,7 @@
 #define MEM 7
 
 // Functions
+#define NOOP 0x0
 #define SLL 0x0
 #define SRL 0x2
 #define SRA 0x3
@@ -89,5 +90,6 @@ mips_error store(mips_cpu_h state, uint32_t var[8]);
 mips_error move(mips_cpu_h state, uint32_t var[8]);
 mips_error mult_div(mips_cpu_h state, uint32_t var[8]);
 mips_error shift(mips_cpu_h state, uint32_t var[8]);
+mips_error set(mips_cpu_h state, uint32_t var[8], uint32_t imm);
 
 #endif // MIPS_CPU_YMH15_H
