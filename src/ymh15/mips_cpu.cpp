@@ -114,15 +114,15 @@ mips_error mips_cpu_step(mips_cpu_h state) {
         }
         fprintf(state->debug_type, "\n\n");
     }
-    
-    if(state->debug_level > 0) {
-        fprintf(state->debug_type, "pc: %d\tpc_next: %d\tinst: %#10x\tdelay_slot: %d\n", state->pc, state->next_pc, inst, state->delay_slot);
-    }
 
     // it then executes the instruction by decoding it first and returns
     // the state of the instruction
     err = exec_instruction(state, inst);
     if(err != mips_Success) return err;
+    
+    if(state->debug_level > 0) {
+        fprintf(state->debug_type, "inst: %#10x\tpc: %d\tpc_next: %d\tdelay_slot: %d\n", inst, state->pc, state->next_pc, state->delay_slot);
+    }
 
     if(state->debug_level > 1) {
         fprintf(state->debug_type, "\nCPU register state after:\n");
@@ -189,6 +189,7 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
         var[REG_D] = (inst >> 11)&0x1f;
         var[SHIFT] = (inst >> 6)&0x1f;
         var[FUNC] = inst&0x3f;
+ 
         // execute R instruction to perform operation
         return exec_R(state, var);
         
@@ -211,7 +212,7 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
     // or subtraction
     if((var[FUNC]&0xf0) == ADD && (var[FUNC]&0xf) < 4) {
         // calls add with -1 if it is a subtractin and 1 if it is addition
-        return add_sub(state, var, ((int32_t)-(var[FUNC]&0xf)/2)*2+1, 0);
+                return add_sub(state, var, ((int32_t)-(var[FUNC]&0xf)/2)*2+1, 0);
         
     } else if((var[FUNC]&0xf0) == 0x20 && (var[FUNC]&0xf) < 7) {
         // else if the number is between 0x23 and 0x27 which means it
