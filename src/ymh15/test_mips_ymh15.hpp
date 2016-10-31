@@ -71,6 +71,7 @@ void change_endianness(uint32_t &inst);
 
 int check_reg(mips_cpu_h state, uint8_t reg_addr, uint32_t check_value);
 int check_error(mips_error err, mips_error expected_err);
+int check_mem(mips_mem_h mem, uint32_t addr, uint32_t length, uint32_t check_value);
 
 mips_error set_instruction(mips_mem_h mem, mips_cpu_h state, uint32_t mem_location, uint32_t src1, uint32_t src2, uint32_t dest, uint32_t shift, uint32_t function);
 mips_error set_instruction(mips_mem_h mem, mips_cpu_h state, uint32_t mem_location, uint32_t opcode, uint32_t src, uint32_t dest, uint32_t Astart);
