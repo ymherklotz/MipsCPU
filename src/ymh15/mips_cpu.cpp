@@ -102,7 +102,8 @@ mips_error mips_cpu_step(mips_cpu_h state) {
     err = mips_mem_read(state->mem, state->pc, 4, (uint8_t*)&inst);
     if(err != mips_Success) return err;
     
-    // change the instruction back from big endian as it was read as little endian
+    // change the instruction back from big endian as it was read as little
+    // endian
     inst = (inst<<24) | ((inst>>8)&0xff00) | ((inst<<8)&0xff0000) | (inst>>24);
 
     // if the debug level is 2 or higher it will print the register state
@@ -121,7 +122,8 @@ mips_error mips_cpu_step(mips_cpu_h state) {
     if(err != mips_Success) return err;
     
     if(state->debug_level > 0) {
-        fprintf(state->debug_type, "inst: %#10x\tpc: %d\tpc_next: %d\tdelay_slot: %d\n", inst, state->pc, state->next_pc, state->delay_slot);
+        fprintf(state->debug_type, "inst: %#10x\tpc: %d\tpc_next: %d\tdelay_slo"
+                "t: %d\n", inst, state->pc, state->next_pc, state->delay_slot);
     }
 
     if(state->debug_level > 1) {
@@ -183,7 +185,7 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
     // decodes the instruction
 
     // if first 6 bits are 0 then it is a R instruction
-    if(((inst >> 26)&0x3f) == 0) {                                       // R Type
+    if(((inst >> 26)&0x3f) == 0) {                                     // R Type
         var[REG_S] = inst >> 21;
         var[REG_T] = (inst >> 16)&0x1f;
         var[REG_D] = (inst >> 11)&0x1f;
@@ -193,12 +195,12 @@ mips_error exec_instruction(mips_cpu_h state, uint32_t inst) {
         // execute R instruction to perform operation
         return exec_R(state, var);
         
-    } else if(((inst >> 26)&0x3f) == J || ((inst >> 26)&0x3f) == JAL) {  // J Type
+    } else if(((inst >> 26)&0x3f) == J || ((inst >> 26)&0x3f) == JAL) {// J Type
         var[OPCODE] = inst >> 26;           
         var[MEM] = inst&0x3ffffff;
         return exec_J(state, var);
         
-    } else {                                                             // I type
+    } else {                                                           // I type
         var[OPCODE] = inst >> 26;      
         var[REG_S] = (inst >> 21)&0x1f;
         var[REG_D] = (inst >> 16)&0x1f;
@@ -212,7 +214,8 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
     // or subtraction
     if((var[FUNC]&0xf0) == ADD && (var[FUNC]&0xf) < 4) {
         // calls add with -1 if it is a subtractin and 1 if it is addition
-                return add_sub(state, var, ((int32_t)-(var[FUNC]&0xf)/2)*2+1, 0);
+                return add_sub(state, var, ((int32_t)-(var[FUNC]&0xf)/2)*2+1,
+                               0);
         
     } else if((var[FUNC]&0xf0) == 0x20 && (var[FUNC]&0xf) < 7) {
         // else if the number is between 0x23 and 0x27 which means it
@@ -234,10 +237,12 @@ mips_error exec_R(mips_cpu_h state, uint32_t var[8]) {
     } else if(var[FUNC] == SLT || var[FUNC] == SLTU) {
         return set(state, var, 0);
         
-    } else if(var[FUNC] == SLL || var[FUNC] == SLLV || var[FUNC] == SRA || var[FUNC] == SRAV || var[FUNC] == SRL || var[FUNC] == SRLV) {
+    } else if(var[FUNC] == SLL || var[FUNC] == SLLV || var[FUNC] == SRA ||
+              var[FUNC] == SRAV || var[FUNC] == SRL || var[FUNC] == SRLV) {
         return shift(state, var);
         
-    } else if(var[OPCODE] == 0 && var[REG_S] == 0 && var[REG_D] == 0 && var[REG_T] == 0 && var[SHIFT] == 0 && var[FUNC] == NOOP) {
+    } else if(var[OPCODE] == 0 && var[REG_S] == 0 && var[REG_D] == 0 &&
+              var[REG_T] == 0 && var[SHIFT] == 0 && var[FUNC] == NOOP) {
         return mips_Success; 
         
     } else {
@@ -327,7 +332,8 @@ mips_error add_sub(mips_cpu_h state, uint32_t var[8], int32_t add_sub,
     reg_d = reg_s + add_sub*reg_t;
 
     // check for overflow conditions and if it is an unsigned operation
-    if((var[FUNC]&0x1) == 1 || imm > 1 || !((reg_s > 0 && add_sub*reg_t > 0 && reg_d < 0) || (reg_s < 0 && add_sub*reg_t < 0 && reg_d > 0))) {
+    if((var[FUNC]&0x1) == 1 || imm > 1 || !((reg_s > 0 && add_sub*reg_t > 0 &&
+        reg_d < 0) || (reg_s < 0 && add_sub*reg_t < 0 && reg_d > 0))) {
 
         // sets the destination register to the right answer
         mips_cpu_set_register(state, var[REG_D], (uint32_t)reg_d);
@@ -338,7 +344,8 @@ mips_error add_sub(mips_cpu_h state, uint32_t var[8], int32_t add_sub,
 }
 
 mips_error bitwise(mips_cpu_h state, uint32_t var[8], unsigned imm) {
-    // selects the right bitwise operation to perform then sets the register to the right value
+    // selects the right bitwise operation to perform then sets the register
+    // to the right value
     uint32_t reg_s, reg_t, reg_d;
     
     mips_cpu_get_register(state, var[REG_S], &reg_s);
@@ -434,7 +441,8 @@ mips_error load(mips_cpu_h state, uint32_t var[8]) {
         }
         err = mips_mem_read(state->mem, addr, 4, (uint8_t*)&mem_word);
         if(err != mips_Success) return err;
-        mem_word = (mem_word<<24) | ((mem_word>>8)&0xff00) | ((mem_word<<8)&0xff0000) | (mem_word>>24);
+        mem_word = (mem_word<<24) | ((mem_word>>8)&0xff00) |
+            ((mem_word<<8)&0xff0000) | (mem_word>>24);
     } else if(var[OPCODE] == LWL) {
         i = 3;
         while((addr&3) != 0) {
@@ -466,7 +474,9 @@ mips_error load(mips_cpu_h state, uint32_t var[8]) {
         state->regs[var[REG_D]] = (uint32_t)(int16_t)mem_halfword;
         return mips_Success;
     case LWL:
-        state->regs[var[REG_D]] = (state->regs[var[REG_D]]&(0xffffffff>>((3-i)*8))) | (mem_word&(0xffffffff<<((i+1)*8)));
+        state->regs[var[REG_D]] =
+            (state->regs[var[REG_D]]&(0xffffffff>>((3-i)*8))) |
+            (mem_word&(0xffffffff<<((i+1)*8)));
         return mips_Success;
     case LW:
         state->regs[var[REG_D]] = mem_word;
@@ -478,7 +488,8 @@ mips_error load(mips_cpu_h state, uint32_t var[8]) {
         state->regs[var[REG_D]] = (uint32_t)mem_halfword;
         return mips_Success;
     case LWR:
-        state->regs[var[REG_D]] = (state->regs[var[REG_D]]&(0xffffffff<<(i*8))) | (mem_word&(0xffffffff>>((4-i)*8)));
+        state->regs[var[REG_D]] = (state->regs[var[REG_D]]&(0xffffffff<<(i*8)))
+            | (mem_word&(0xffffffff>>((4-i)*8)));
         return mips_Success;
     default:
         return mips_ExceptionInvalidInstruction;
@@ -511,7 +522,8 @@ mips_error store(mips_cpu_h state, uint32_t var[8]) {
         if((addr&0b1) == 1 || (addr&0b10)>>1 == 1) {
             return mips_ExceptionInvalidAlignment;
         }
-        uint32_t tmp = word<<24 | ((word>>8)&0xff00) | ((word<<8)&0xff0000) | word>>24;
+        uint32_t tmp = word<<24 | ((word>>8)&0xff00) | ((word<<8)&0xff0000) |
+            word>>24;
         err = mips_mem_write(state->mem, addr, 4, (uint8_t*)&tmp);
         if(err != mips_Success) return err;
     } else {
@@ -540,13 +552,15 @@ mips_error mult_div(mips_cpu_h state, uint32_t var[8]) {
     uint64_t unsigned_result, signed_result;
     switch(var[FUNC]) {
     case MULT: 
-        signed_result = ((int64_t)(int32_t)state->regs[var[REG_S]])*((int64_t)(int32_t)state->regs[var[REG_T]]);
+        signed_result = ((int64_t)(int32_t)state->regs[var[REG_S]])*
+            ((int64_t)(int32_t)state->regs[var[REG_T]]);
         state->lo = (uint32_t)signed_result;
         state->hi = (uint32_t)(signed_result>>32);
         return mips_Success;
         
     case MULTU:
-        unsigned_result = ((uint64_t)state->regs[var[REG_S]])*((uint64_t)state->regs[var[REG_T]]);
+        unsigned_result = ((uint64_t)state->regs[var[REG_S]])*((uint64_t)state->
+                                                               regs[var[REG_T]]);
         state->lo = (uint32_t)unsigned_result;
         state->hi = (uint32_t)(unsigned_result>>32);
         return mips_Success;
@@ -558,8 +572,10 @@ mips_error mult_div(mips_cpu_h state, uint32_t var[8]) {
             return mips_Success;
         }
         
-        state->lo = ((int32_t)state->regs[var[REG_S]])/((int32_t)state->regs[var[REG_T]]);
-        state->hi = ((int32_t)state->regs[var[REG_S]])%((int32_t)state->regs[var[REG_T]]);
+        state->lo = ((int32_t)state->regs[var[REG_S]])/((int32_t)state->
+                                                        regs[var[REG_T]]);
+        state->hi = ((int32_t)state->regs[var[REG_S]])%((int32_t)state->
+                                                        regs[var[REG_T]]);
         return mips_Success;
         
     case DIVU:
@@ -582,15 +598,19 @@ mips_error shift(mips_cpu_h state, uint32_t var[8]) {
     if(var[FUNC] == SLL && var[OPCODE] == 0) {
         state->regs[var[REG_D]] = state->regs[var[REG_T]] << var[SHIFT];
     } else if(var[FUNC] == SLLV) {
-        state->regs[var[REG_D]] = state->regs[var[REG_T]] << state->regs[var[REG_S]];
+        state->regs[var[REG_D]] = state->regs[var[REG_T]] <<
+            state->regs[var[REG_S]];
     } else if(var[FUNC] == SRA) {
-        state->regs[var[REG_D]] = (int32_t)state->regs[var[REG_T]] >> var[SHIFT];
+        state->regs[var[REG_D]] = (int32_t)state->regs[var[REG_T]] >>
+            var[SHIFT];
     } else if(var[FUNC] == SRAV) {
-        state->regs[var[REG_D]] = ((int32_t)state->regs[var[REG_T]]) >> state->regs[var[REG_S]];
+        state->regs[var[REG_D]] = ((int32_t)state->regs[var[REG_T]]) >>
+            state->regs[var[REG_S]];
     } else if(var[FUNC] == SRL) {
         state->regs[var[REG_D]] = state->regs[var[REG_T]] >> var[SHIFT];
     } else if(var[FUNC] == SRLV) {
-        state->regs[var[REG_D]] = state->regs[var[REG_T]] >> state->regs[var[REG_S]];
+        state->regs[var[REG_D]] = state->regs[var[REG_T]] >>
+            state->regs[var[REG_S]];
     }
     return mips_Success;
 }
