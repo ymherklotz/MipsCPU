@@ -1,4 +1,4 @@
-#include "../../include/mips.h"
+#include "mips.h"
 #include "mips_cpu_ymh15.hpp"
 
 struct mips_cpu_impl {
