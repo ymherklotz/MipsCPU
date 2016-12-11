@@ -3,7 +3,7 @@
 
 #include <cstdio>
 
-#include "../../include/mips.h"
+#include "mips.h"
 
 // defines the location of the things in the array var
 #define OPCODE 0
