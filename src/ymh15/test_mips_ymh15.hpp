@@ -1,7 +1,7 @@
 #ifndef TEST_MIPS_YMH15_H
 #define TEST_MIPS_YMH15_H
 
-#include "../../include/mips.h"
+#include "mips.h"
 #include <cstdlib>
 #include <ctime>
 
