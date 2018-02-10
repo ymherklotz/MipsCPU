@@ -61,7 +61,7 @@ USER_TEST_OBJECTS = $(patsubst %.cpp,%.o,$(USER_TEST_SRCS))
 # - Your test implementation from $(USER_TEST_OBJECTS), including the main function
 src/$(LOGIN)/test_mips : $(DEFAULT_OBJECTS) $(USER_CPU_OBJECTS) $(USER_TEST_OBJECTS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $^ $(LFLAGS) $(LDLIBS)
-	
+
 # This is a bonus gift. You may want to try building this
 # using:
 #    
@@ -78,7 +78,7 @@ src/$(LOGIN)/test_mips : $(DEFAULT_OBJECTS) $(USER_CPU_OBJECTS) $(USER_TEST_OBJE
 # You may want to look at the corresponding binaries, code, and disassembly
 # in the fragments directory.
 fragments/run_fibonacci : $(DEFAULT_OBJECTS) $(USER_CPU_OBJECTS)
-	
+
 # Again, another bonus gift. If you are convinced that your
 # program implements addu (and one other instruction) correctly,
 # then try running this.
