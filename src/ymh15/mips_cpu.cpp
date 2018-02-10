@@ -265,13 +265,9 @@ mips_error exec_J(mips_cpu_h state, uint32_t var[8]) {
 mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
     switch(var[OPCODE]) {
     case BGEZ: 
-        return branch(state, var);
     case BEQ: 
-        return branch(state, var);
     case BNE:
-        return branch(state, var);
     case BLEZ: 
-        return branch(state, var); 
     case BGTZ: 
         return branch(state, var);
     case ADDI: 
@@ -279,35 +275,23 @@ mips_error exec_I(mips_cpu_h state, uint32_t var[8]) {
     case ADDIU: 
         return add_sub(state, var, 1, 2);
     case SLTI:
-        return set(state, var, 1);
     case SLTIU:
         return set(state, var, 1);
     case ANDI:
-        return bitwise(state, var, 1);
     case ORI: 
-        return bitwise(state, var, 1);
     case XORI: 
         return bitwise(state, var, 1);
     case LUI: 
-        return load(state, var);
     case LB: 
-        return load(state, var);
     case LH: 
-        return load(state, var);
     case LWL: 
-        return load(state, var);
     case LW: 
-        return load(state, var);
     case LBU: 
-        return load(state, var);
     case LHU: 
-        return load(state, var);
     case LWR: 
         return load(state, var);
     case SB:
-        return store(state, var);
     case SH: 
-        return store(state, var);
     case SW: 
         return store(state, var);
     default:

@@ -1,2 +1,4 @@
 /doc/html
 /doc/latex
+*.o
+test_mips
